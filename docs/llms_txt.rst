@@ -16,6 +16,16 @@ Discovery behavior
 - Excludes auth-only views in auto mode.
 - Excludes parameterized routes by default unless explicitly enabled.
 
+Curating large sites
+====================
+
+If you use ``ViewForAgents`` as a broad site-wide base class, ``llms.txt`` may
+include more public pages than you actually want to advertise.
+
+In that setup, mark utility, status, or low-value pages with
+``include_in_llms = False`` and opt in only the pages that should appear in the
+generated index.
+
 Entry metadata
 ==============
 
