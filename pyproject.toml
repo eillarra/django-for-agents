@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "django-for-agents"
-version = "0.0.1"
+version = "0.0.2"
 description = "Django utilities to expose agent-friendly markdown and llms.txt indexes"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -27,7 +27,7 @@ classifiers = [
   "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-  "Django>=6.0",
+  "django>=6.0",
 ]
 
 [project.urls]
@@ -36,6 +36,9 @@ Repository = "https://github.com/eillarra/django-for-agents"
 Issues = "https://github.com/eillarra/django-for-agents/issues"
 
 [project.optional-dependencies]
+markdown = [
+  "markdownify>=1.2.0",
+]
 docs = [
   "sphinx>=7.0",
   "sphinx-rtd-theme>=2.0",
@@ -45,6 +48,7 @@ docs = [
 [dependency-groups]
 dev = [
   "django-stubs>=5.0",
+  "markdownify>=1.2.0",
   "mypy>=1.10",
   "pytest>=8.0",
   "pytest-django>=4.8",
@@ -61,6 +65,9 @@ target-version = "py312"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.ruff.lint.isort]
+lines-after-imports = 2
 
 [tool.mypy]
 python_version = "3.12"

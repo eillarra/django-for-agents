@@ -7,4 +7,4 @@ class DjangoForAgentsConfig(AppConfig):
     """App config for django_for_agents."""
 
     name = "django_for_agents"
-    verbose_name = "Django For Agents"
+    verbose_name = "Django for Agents"

@@ -45,6 +45,14 @@ class ViewForAgents(TemplateView):
     llms_priority: int = 100
     llms_include_parameterized_routes: bool = False
 
+    def __init__(self, **kwargs: Any) -> None:
+        """Initialize the view and agent-response bookkeeping.
+
+        :param kwargs: Keyword arguments passed to ``TemplateView``.
+        """
+        super().__init__(**kwargs)
+        self._last_rendered_html: str = ""
+
     def get_dev_toggle_param(self) -> str:
         """Return query parameter name used for markdown debug toggle.
 
@@ -76,21 +84,51 @@ class ViewForAgents(TemplateView):
 
     @staticmethod
     def _accept_header_requests_markdown(request: HttpRequest) -> bool:
-        """Return True when ``Accept`` explicitly includes markdown.
+        """Return True when ``Accept`` explicitly accepts markdown.
+
+        Honors q-values: a media type with ``q=0`` is treated as unacceptable,
+        and matches are ordered by descending q prior to accepting.
 
         :param request: Incoming HTTP request.
-        :returns: True when markdown media range is present.
+        :returns: True when markdown is an acceptable response.
         """
         accept_header = request.headers.get("Accept", "")
         if not accept_header:
             return False
 
-        for item in accept_header.split(","):
-            media_range = item.split(";", maxsplit=1)[0].strip().lower()
-            if media_range == "text/markdown":
-                return True
+        markdown_q: float | None = None
+        wildcard_q: float | None = None
 
-        return False
+        for item in accept_header.split(","):
+            token = item.strip()
+            if not token:
+                continue
+
+            media_range, *params = token.split(";")
+            media_range = media_range.strip().lower()
+            if not media_range:
+                continue
+
+            q = 1.0
+            for param in params:
+                param = param.strip()
+                if param.startswith("q="):
+                    try:
+                        q = float(param[2:])
+                    except ValueError:
+                        q = 0.0
+
+            if q <= 0:
+                continue
+
+            if media_range == "text/markdown":
+                markdown_q = q if markdown_q is None else max(markdown_q, q)
+            elif media_range in ("*/*", "text/*"):
+                wildcard_q = q if wildcard_q is None else max(wildcard_q, q)
+
+        if markdown_q is not None:
+            return True
+        return wildcard_q is not None
 
     def _is_dev_toggle_enabled(self, request: HttpRequest) -> bool:
         """Return True when debug mode toggle requests markdown.
@@ -172,6 +210,67 @@ class ViewForAgents(TemplateView):
 
         return f"{template_name}.md"
 
+    def get_html_template_name(self, request: HttpRequest, context: dict[str, Any]) -> str | None:
+        """Return the HTML template name used for fallback markdown conversion.
+
+        :param request: Incoming HTTP request.
+        :param context: Render context.
+        :returns: HTML template name or None.
+        """
+        template_name = getattr(self, "template_name", "")
+        if not template_name:
+            return None
+        return str(template_name)
+
+    def convert_html_to_markdown(self, html: str) -> str:
+        """Convert rendered HTML into a basic markdown fallback.
+
+        Preserves JSON-LD ``<script>`` blocks by appending them as a fenced
+        ``json`` code block at the end, matching Cloudflare's Markdown for
+        Agents output format. All other ``<script>`` and ``<style>`` content
+        is stripped during HTML processing by ``markdownify``.
+
+        :param html: Rendered HTML string.
+        :returns: Markdown text derived from the HTML.
+        :raises ImproperlyConfigured: when ``markdownify`` is not installed.
+        """
+        try:
+            from markdownify import markdownify as html_to_markdown
+        except ModuleNotFoundError as exc:
+            raise ImproperlyConfigured(
+                "No markdown template and 'markdownify' is not installed. "
+                "Install it with `pip install django-for-agents[markdown]`, "
+                "or provide a matching .md template."
+            ) from exc
+
+        json_ld = self._extract_json_ld(html)
+        markdown = html_to_markdown(html, heading_style="ATX", bullets="-").strip()
+
+        if json_ld:
+            markdown += f"\n\n```json\n{json_ld}\n```"
+
+        return markdown
+
+    @staticmethod
+    def _extract_json_ld(html: str) -> str:
+        """Extract and concatenate JSON-LD blocks from rendered HTML.
+
+        Matches ``<script type="application/ld+json">...</script>`` blocks
+        and joins their contents, one per line. This mirrors Cloudflare's
+        Markdown for Agents behaviour.
+
+        :param html: Rendered HTML string.
+        :returns: Concatenated JSON-LD content, or empty string if none found.
+        """
+        import re
+
+        pattern = re.compile(
+            r'<script\s+[^>]*type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
+            re.DOTALL | re.IGNORECASE,
+        )
+        blocks = [match.strip() for match in pattern.findall(html) if match.strip()]
+        return "\n".join(blocks)
+
     def get_markdown_body(self, request: HttpRequest, context: dict[str, Any]) -> str:
         """Return markdown body text for the response.
 
@@ -188,6 +287,12 @@ class ViewForAgents(TemplateView):
                     raise ImproperlyConfigured(
                         f"Markdown template '{template_name}' not found for {self.__class__.__name__}."
                     ) from exc
+
+        html_template_name = self.get_html_template_name(request, context)
+        if html_template_name:
+            html = render_to_string(html_template_name, context=context, request=request)
+            self._last_rendered_html = html
+            return self.convert_html_to_markdown(html)
 
         explicit_markdown = context.get("agent_markdown")
         if explicit_markdown:
@@ -212,8 +317,26 @@ class ViewForAgents(TemplateView):
         replacement = "\n" * allowed_newlines
         return re.sub(pattern, replacement, normalized)
 
+    def get_content_signal(self, request: HttpRequest) -> str:
+        """Return the ``Content-Signal`` header value for markdown responses.
+
+        Follows the framework defined at https://contentsignals.org/. Signals
+        express the website operator's preferences for how the content may be
+        used after being accessed by AI systems. The default mirrors
+        Cloudflare's Markdown for Agents and signals that the content is
+        available for AI training, search results, and agentic input.
+
+        :param request: Incoming HTTP request.
+        :returns: Content-Signal header value string, empty to disable.
+        """
+        return str(_setting("CONTENT_SIGNAL", "ai-train=yes, search=yes, ai-input=yes"))
+
     def render_markdown_response(self, request: HttpRequest, context: dict[str, Any]) -> HttpResponse:
         """Render and return markdown HTTP response.
+
+        If the markdown body cannot be produced (missing ``markdownify`` and no
+        ``.md`` template or ``agent_markdown`` context value), a 501 response
+        is returned instead of letting ``ImproperlyConfigured`` surface as 500.
 
         :param request: Incoming HTTP request.
         :param context: Render context.
@@ -231,7 +354,11 @@ class ViewForAgents(TemplateView):
                 yaml_lines.append("---")
                 markdown_parts.append("\n".join(yaml_lines))
 
-        body = self.get_markdown_body(request, context)
+        try:
+            body = self.get_markdown_body(request, context)
+        except ImproperlyConfigured as exc:
+            return self.render_markdown_not_implemented_response(request, str(exc))
+
         if body:
             markdown_parts.append(body)
 
@@ -240,7 +367,54 @@ class ViewForAgents(TemplateView):
 
         response = HttpResponse(document, content_type="text/markdown; charset=utf-8")
         patch_vary_headers(response, ("Accept",))
+
+        markdown_tokens = self._estimate_token_count(document)
+        response.headers["x-markdown-tokens"] = str(markdown_tokens)
+
+        original_html = self._last_rendered_html
+        if original_html:
+            response.headers["x-original-tokens"] = str(self._estimate_token_count(original_html))
+
+        content_signal = self.get_content_signal(request)
+        if content_signal:
+            response.headers["Content-Signal"] = content_signal
+
         return response
+
+    def render_markdown_not_implemented_response(self, request: HttpRequest, reason: str) -> HttpResponse:
+        """Return a 501 explaining that markdown could not be produced.
+
+        Used when the markdown body cannot be built: the optional
+        ``markdownify`` dependency is missing and no ``.md`` template or
+        ``agent_markdown`` context value is available. Returning 501 (rather
+        than letting ``ImproperlyConfigured`` surface as a 500) keeps the
+        failure honest — the client asked for a representation the server
+        cannot currently produce — and lets agents fall back to HTML.
+
+        :param request: Incoming HTTP request.
+        :param reason: Human-readable explanation of the missing piece.
+        :returns: Markdown 501 response with a short explanatory body.
+        """
+        body = f"# Markdown not available\n\n{reason}\n"
+        response = HttpResponse(body, status=501, content_type="text/markdown; charset=utf-8")
+        patch_vary_headers(response, ("Accept",))
+        return response
+
+    @staticmethod
+    def _estimate_token_count(text: str) -> int:
+        """Estimate the token count of a string for agent use.
+
+        Uses a heuristic of roughly 4 characters per token, which is a common
+        approximation for mixed English/code content. Aligns with the
+        ``x-markdown-tokens`` / ``x-original-tokens`` headers exposed by
+        Cloudflare's Markdown for Agents.
+
+        :param text: Input text to estimate.
+        :returns: Estimated token count.
+        """
+        if not text:
+            return 0
+        return max(1, len(text) // 4)
 
     def render_to_response(self, context: dict[str, Any], **response_kwargs: Any) -> HttpResponse:
         """Render HTML or markdown response based on request negotiation.

@@ -1,28 +1,14 @@
-"""Automatic llms.txt registry generation for ViewForAgents routes."""
+"""Discovery of ViewForAgents endpoints for ``llms.txt``."""
 
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import Any
 
-from django.conf import settings
 from django.contrib.auth.mixins import AccessMixin
-from django.http import HttpRequest, HttpResponse
 from django.urls import URLPattern, URLResolver, get_resolver
-from django.views import View
 
-from .views import ViewForAgents
-
-
-def _setting(name: str, default: Any) -> Any:
-    """Read plugin settings with FOR_AGENTS_ prefix.
-
-    :param name: Setting key suffix.
-    :param default: Fallback value.
-    :returns: Setting value.
-    """
-    return getattr(settings, f"FOR_AGENTS_{name}", default)
+from ..views import ViewForAgents
 
 
 @dataclass(frozen=True)
@@ -130,55 +116,3 @@ def collect_llms_endpoints() -> list[LlmsEndpoint]:
     """
     endpoints = _iter_agent_ready_patterns(get_resolver().url_patterns)
     return sorted(endpoints, key=lambda endpoint: (endpoint.priority, endpoint.kind, endpoint.path, endpoint.name))
-
-
-class LlmsTxtView(View):
-    """Serve an automatically generated llms.txt document."""
-
-    def get_site_title(self) -> str:
-        """Return site title used by llms.txt header.
-
-        :returns: Site title.
-        """
-        return str(_setting("SITE_TITLE", "Django Site"))
-
-    def get(self, request: HttpRequest, *args: Any, **kwargs: Any) -> HttpResponse:
-        """Render llms.txt from discovered ViewForAgents routes.
-
-        :param request: The incoming HTTP request.
-        :returns: Plain-text llms.txt response.
-        """
-        endpoints = collect_llms_endpoints()
-        lines = [
-            f"# {self.get_site_title()}",
-            "",
-            "Agent-ready endpoint index discovered from Django URL configuration.",
-            "Use `Accept: text/markdown` to fetch markdown responses when available.",
-            "",
-        ]
-
-        grouped: dict[str, list[LlmsEndpoint]] = {}
-        for endpoint in endpoints:
-            grouped.setdefault(endpoint.kind, []).append(endpoint)
-
-        ordered_kinds = sorted(
-            grouped.keys(),
-            key=lambda kind: min(endpoint.priority for endpoint in grouped[kind]),
-        )
-
-        for kind in ordered_kinds:
-            lines.append(f"## {kind}")
-            lines.append("")
-
-            for endpoint in sorted(
-                grouped[kind], key=lambda endpoint: (endpoint.priority, endpoint.title, endpoint.path)
-            ):
-                absolute_url = request.build_absolute_uri(endpoint.path)
-                lines.append(f"- {endpoint.title}")
-                lines.append(f"  - url: {absolute_url}")
-                if endpoint.description:
-                    lines.append(f"  - description: {endpoint.description}")
-                lines.append("")
-
-        document = "\n".join(lines).rstrip() + "\n"
-        return HttpResponse(document, content_type="text/plain; charset=utf-8")

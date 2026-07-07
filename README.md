@@ -1,4 +1,4 @@
-# Django For Agents
+# Django for Agents
 
 [![github-tests-badge]][github-tests]
 [![github-mypy-badge]][github-mypy]
@@ -28,7 +28,19 @@ uv add django-for-agents
 1. Add the app to `INSTALLED_APPS`.
 2. Include `django_for_agents.urls` in your root URL config.
 3. Inherit `ViewForAgents` for pages you want agent-ready.
-4. Create matching `.md` templates for markdown responses.
+4. Optionally create matching `.md` templates for markdown responses.
+
+If no matching `.md` template exists, django-for-agents falls back to converting
+the rendered HTML template into markdown automatically. This fallback requires
+the optional ``markdownify`` dependency:
+
+```bash
+uv add 'django-for-agents[markdown]'
+```
+
+If neither a ``.md`` template nor ``markdownify`` is available, requests for
+markdown receive a **501 Not Implemented** response explaining what is missing,
+so agents can fall back to HTML instead of hitting a 500.
 
 ```python
 INSTALLED_APPS = [

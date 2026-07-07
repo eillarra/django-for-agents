@@ -47,11 +47,14 @@ Quickstart
           }
           return self.render_to_response(context)
 
-4. Add markdown template
-========================
+4. Add markdown template (optional)
+===================================
 
 Given ``docs/page.html``, also create ``docs/page.md``. When the request
 includes ``Accept: text/markdown``, django-for-agents renders ``.md``.
+
+If no matching ``.md`` file exists, django-for-agents falls back to converting
+the rendered HTML output into markdown automatically.
 
 .. code-block:: django
 

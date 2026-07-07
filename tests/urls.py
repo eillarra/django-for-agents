@@ -41,6 +41,16 @@ class DocsView(ViewForAgents):
         return self.render_to_response({"page_title": "Docs", "body": "Docs body"})
 
 
+class HtmlFallbackView(ViewForAgents):
+    """Page that relies on HTML-to-Markdown fallback when no .md template exists."""
+
+    template_name = "pages/fallback.html"
+
+    def get(self, request: HttpRequest) -> HttpResponse:
+        """Render HTML-only page for fallback tests."""
+        return self.render_to_response({"page_title": "Fallback", "body": "Fallback body"})
+
+
 class ItemView(ViewForAgents):
     """Parameterized page excluded from llms index by default."""
 
@@ -50,6 +60,16 @@ class ItemView(ViewForAgents):
     def get(self, request: HttpRequest, slug: str) -> HttpResponse:
         """Render item page for tests."""
         return self.render_to_response({"page_title": f"Item {slug}"})
+
+
+class JsonLdFallbackView(ViewForAgents):
+    """Page that relies on the HTML fallback and embeds JSON-LD structured data."""
+
+    template_name = "pages/with_jsonld.html"
+
+    def get(self, request: HttpRequest) -> HttpResponse:
+        """Render a page with JSON-LD for fallback conversion tests."""
+        return self.render_to_response({"page_title": "JSON-LD Page", "body": "Body with structured data."})
 
 
 class PrivateView(LoginRequiredMixin, ViewForAgents):
@@ -65,6 +85,8 @@ class PrivateView(LoginRequiredMixin, ViewForAgents):
 urlpatterns = [
     path("", HomeView.as_view(), name="home"),
     path("docs/", DocsView.as_view(), name="docs"),
+    path("fallback/", HtmlFallbackView.as_view(), name="fallback"),
+    path("jsonld/", JsonLdFallbackView.as_view(), name="jsonld"),
     path("items/<slug:slug>/", ItemView.as_view(), name="item"),
     path("private/", PrivateView.as_view(), name="private"),
     path("", include("django_for_agents.urls")),

@@ -37,3 +37,29 @@ Each endpoint can expose:
 - priority
 
 Configure per-view via ``llms_*`` class attributes.
+
+JSON format
+===========
+
+The endpoint supports content negotiation. Send ``Accept: application/llms+json``
+(or ``application/json``) to receive a JSON document instead of plain text:
+
+.. code-block:: json
+
+  {
+    "title": "My site",
+    "intro": "Use `Accept: text/markdown` to fetch markdown responses when available.",
+    "endpoints": [
+      {"title": "Home", "kind": "homepage", "url": "https://example.com/", "priority": 10}
+    ]
+  }
+
+Both responses carry ``Vary: Accept`` so caches store them separately.
+
+Site title fallback
+===================
+
+When ``FOR_AGENTS_SITE_TITLE`` is not set, the view falls back to:
+
+1. The current Django ``Site.name`` when ``django.contrib.sites`` is installed.
+2. The generic ``"Site"`` default otherwise.
