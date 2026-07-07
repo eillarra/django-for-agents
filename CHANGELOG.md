@@ -8,6 +8,13 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
 ## [Unreleased]
 
 
+## [0.0.3] - 2026-07-07
+
+### Fixed
+
+- Only serve markdown on explicit ``Accept: text/markdown``; ignore wildcards (``*/*``, ``text/*``) so browsers get HTML instead of markdown.
+
+
 ## [0.0.2] - 2026-07-07
 
 ### Added
@@ -45,6 +52,7 @@ The format is inspired by Keep a Changelog and follows semantic versioning.
 - Tag-based release workflow for PyPI publishing.
 
 
-[unreleased]: https://github.com/eillarra/django-for-agents/compare/0.0.2...HEAD
+[unreleased]: https://github.com/eillarra/django-for-agents/compare/0.0.3...HEAD
+[0.0.3]: https://github.com/eillarra/django-for-agents/releases/tag/0.0.3
 [0.0.2]: https://github.com/eillarra/django-for-agents/releases/tag/0.0.2
 [0.0.1]: https://github.com/eillarra/django-for-agents/releases/tag/0.0.1

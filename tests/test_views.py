@@ -60,28 +60,39 @@ def test_markdown_rejected_when_q_is_zero(client):
     assert response.headers["Content-Type"].startswith("text/html")
 
 
-def test_markdown_served_with_wildcard_accept(client):
-    """Serve markdown when Accept uses a wildcard that includes text/*."""
-    response = client.get(reverse("home"), HTTP_ACCEPT="text/*")
-
-    assert response.status_code == 200
-    assert response.headers["Content-Type"].startswith("text/markdown")
-
-
-def test_markdown_served_with_star_star_accept(client):
-    """Serve markdown when Accept is */* and nothing else."""
-    response = client.get(reverse("home"), HTTP_ACCEPT="*/*")
-
-    assert response.status_code == 200
-    assert response.headers["Content-Type"].startswith("text/markdown")
-
-
 def test_markdown_served_with_q_priority(client):
     """Serve markdown when listed alongside HTML with explicit q values."""
     response = client.get(reverse("home"), HTTP_ACCEPT="text/html;q=0.9, text/markdown;q=1.0")
 
     assert response.status_code == 200
     assert response.headers["Content-Type"].startswith("text/markdown")
+
+
+def test_browser_accept_header_returns_html(client):
+    """Serve HTML for a typical browser Accept header with */*;q=0.8."""
+    response = client.get(
+        reverse("home"),
+        HTTP_ACCEPT="text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    )
+
+    assert response.status_code == 200
+    assert response.headers["Content-Type"].startswith("text/html")
+
+
+def test_wildcard_only_accept_returns_html(client):
+    """Serve HTML when Accept is */* and nothing else is specified."""
+    response = client.get(reverse("home"), HTTP_ACCEPT="*/*")
+
+    assert response.status_code == 200
+    assert response.headers["Content-Type"].startswith("text/html")
+
+
+def test_text_wildcard_accept_returns_html(client):
+    """Serve HTML when Accept is text/* and nothing else is specified."""
+    response = client.get(reverse("home"), HTTP_ACCEPT="text/*")
+
+    assert response.status_code == 200
+    assert response.headers["Content-Type"].startswith("text/html")
 
 
 def test_empty_accept_header_returns_html(client):

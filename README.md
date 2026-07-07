@@ -13,7 +13,6 @@ django-for-agents helps Django projects expose agent-friendly content:
 - Markdown responses via HTTP content negotiation (`Accept: text/markdown`).
 - Optional debug toggle (`?for_agents=1`) in development.
 - Automatic `llms.txt` endpoint generation from your URL configuration.
-- Frontmatter metadata and markdown whitespace normalization.
 
 Supported Python versions: 3.12, 3.13, 3.14.
 

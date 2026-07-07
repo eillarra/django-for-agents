@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "django-for-agents"
-version = "0.0.2"
+version = "0.0.3"
 description = "Django utilities to expose agent-friendly markdown and llms.txt indexes"
 readme = "README.md"
 requires-python = ">=3.12"

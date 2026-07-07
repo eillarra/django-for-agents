@@ -86,18 +86,17 @@ class ViewForAgents(TemplateView):
     def _accept_header_requests_markdown(request: HttpRequest) -> bool:
         """Return True when ``Accept`` explicitly accepts markdown.
 
-        Honors q-values: a media type with ``q=0`` is treated as unacceptable,
-        and matches are ordered by descending q prior to accepting.
+        Only an explicit ``text/markdown`` media range (with ``q > 0``)
+        triggers a Markdown response. Wildcards are ignored, because real
+        agents always ask for ``Accept: text/markdown`` explicitly, and
+        browsers use ``*/*`` alongside ``text/html``.
 
         :param request: Incoming HTTP request.
-        :returns: True when markdown is an acceptable response.
+        :returns: True when markdown is explicitly accepted.
         """
         accept_header = request.headers.get("Accept", "")
         if not accept_header:
             return False
-
-        markdown_q: float | None = None
-        wildcard_q: float | None = None
 
         for item in accept_header.split(","):
             token = item.strip()
@@ -106,7 +105,7 @@ class ViewForAgents(TemplateView):
 
             media_range, *params = token.split(";")
             media_range = media_range.strip().lower()
-            if not media_range:
+            if media_range != "text/markdown":
                 continue
 
             q = 1.0
@@ -118,17 +117,10 @@ class ViewForAgents(TemplateView):
                     except ValueError:
                         q = 0.0
 
-            if q <= 0:
-                continue
+            if q > 0:
+                return True
 
-            if media_range == "text/markdown":
-                markdown_q = q if markdown_q is None else max(markdown_q, q)
-            elif media_range in ("*/*", "text/*"):
-                wildcard_q = q if wildcard_q is None else max(wildcard_q, q)
-
-        if markdown_q is not None:
-            return True
-        return wildcard_q is not None
+        return False
 
     def _is_dev_toggle_enabled(self, request: HttpRequest) -> bool:
         """Return True when debug mode toggle requests markdown.
